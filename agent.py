@@ -12,7 +12,7 @@ import dotenv
 from openai import OpenAI
 import argparse
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 # Load environment variables
 dotenv.load_dotenv(".env.agent.secret")
@@ -164,6 +164,7 @@ def main():
         # Agentic loop
         tool_calls_log = []
         tool_call_count = 0
+        answer: Optional[str] = None
 
         while tool_call_count < MAX_TOOL_CALLS:
             # Make API call with tools
@@ -172,7 +173,6 @@ def main():
                 messages=messages,
                 tools=TOOLS,
                 tool_choice="auto",
-                timeout=60
             )
 
             choice = response.choices[0]
@@ -192,7 +192,7 @@ def main():
                         tool_args = {}
 
                     print(f"Tool call: {tool_name}({tool_args})", file=sys.stderr)
-                    
+
                     # Execute tool
                     result = execute_tool(tool_name, tool_args)
                     print(f"Tool result length: {len(result)} chars", file=sys.stderr)
@@ -218,15 +218,17 @@ def main():
                         break
 
                 if tool_call_count >= MAX_TOOL_CALLS:
+                    # Max calls reached without final answer
+                    answer = answer or "I was unable to find a complete answer within the allowed number of tool calls."
                     break
             else:
                 # No tool calls, this is the final answer
                 answer = message.content
                 break
-        else:
-            # Max iterations reached
-            print("Max iterations reached", file=sys.stderr)
-            answer = "I was unable to find a complete answer within the allowed number of tool calls."
+
+        # Safety fallback if answer is still None
+        if answer is None:
+            answer = "No answer was provided by the LLM."
 
         # Try to extract source from answer (if LLM provided one)
         # For Task 1 compatibility, if no tool calls were made, use simpler output
